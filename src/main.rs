@@ -54,7 +54,7 @@ fn main() {
 
 	let b = broker_service();
 
-	camera_service(&b,"{}","/camera");
+	camera_service(&b,"/camera");
 	tensor_service(&b);
 	wasm_service(&b);
 	scripting_service(&b,"boot.js");
@@ -64,6 +64,12 @@ fn main() {
 
 }
 
+fn main_test() {
+	let b = broker_service();
+	let (s,r) = unbounded::<Message>();
+	b.send( Message::Observe("stuff".to_string(),s));
+	b.send( Message::Spawn("stuff".to_string(),"wow".to_string()));	
+}
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ///
@@ -75,7 +81,15 @@ fn main() {
 
 pub type MessageSender = Sender<Message>;
 pub type MessageReceiver = Receiver<Message>;
-pub type MessageVec = Vec<MessageSender>;
+pub type SenderVec = Vec<MessageSender>;
+
+//#[macro_use]
+//extern crate lazy_static;
+//lazy_static! { static ref BROKER: (MessageSender,MessageReceiver) = { unbounded::<Message>() }; }
+
+use once_cell::sync::OnceCell;
+
+static BROKER: OnceCell<MessageSender> = OnceCell::new();
 
 #[derive(Clone)]
 pub enum Message {
@@ -83,23 +97,24 @@ pub enum Message {
 	// Ask to receive a copy of all traffic to a topic
 	Observe(String,MessageSender),
 
+	// Send a spawn command to a topic
+	Spawn(String,String),
+
 	// Send a string to a topic
 	Post(String,String),
 
 	// Send a frame buffer to a topic
 	Share(String,Arc<Mutex<Box<[u32;921600]>>>),
 
-	// Send a spawn command to a topic
-	Spawn(String,String),
 }
 
 pub struct Listeners {
-	pub listeners: RefCell<MessageVec>,
+	pub listeners: RefCell<SenderVec>,
 }
 impl Listeners {
 	fn new() -> Listeners {
 		Listeners {
-			listeners: RefCell::new(MessageVec::new()),
+			listeners: RefCell::new(SenderVec::new()),
 		}
 	}
 	fn insert(&self,l:&MessageSender) {
@@ -109,22 +124,32 @@ impl Listeners {
 
 fn broker_service() -> MessageSender {
 	let (s,r) = unbounded::<Message>();
+	BROKER.set(s.clone());
 	thread::spawn(move || {
-		let mut registry = HashMap::<String,Listeners>::new();
+		let mut registry = HashMap::<String,RefCell<Vec::<MessageSender>>>::new();
 		while let Ok(message) = r.recv() {
 			match message {
 				Message::Observe(topic,sender) => {
 					if !registry.contains_key(&topic) {
-						println!("Broker: adding observer {}",&topic);
-						registry.insert(topic.to_string(),Listeners::new());
+						let mut v = RefCell::new(Vec::<MessageSender>::new());
+						registry.insert(topic.to_string(),v);
 					}
-					registry[&topic].insert(&sender);
+					registry[&topic.to_string()].borrow_mut().push(sender);
 				},
-				Message::Spawn(policy,topic) => {
+				Message::Spawn(topic,policy) => {
 					if registry.contains_key(&topic) {
-						let x = &registry[&topic];
-						let y = &x.listeners;
-						let z = y.borrow_mut();
+						for y in registry[&topic.to_string()].borrow_mut().iter() {
+							let m = Message::Spawn(topic.to_string(),policy.to_string());
+							y.send(m);
+						}
+					}
+				},
+				Message::Post(topic,params) => {
+					if registry.contains_key(&topic) {
+						for y in registry[&topic.to_string()].borrow_mut().iter() {
+							let m = Message::Post(topic.to_string(),params.to_string());
+							y.send(m);
+						}
 					}
 				},
 				_ => {
@@ -142,19 +167,19 @@ fn broker_service() -> MessageSender {
 ///
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
-fn camera_service(b:&MessageSender,policy:&str,observe:&str) {
+fn camera_service(b:&MessageSender,topic:&str) {
 	let b = b.clone();
-	let observe = observe.to_string();
+	let topic = topic.to_string();
 	thread::spawn(move || {
 		let (s,r) = unbounded::<Message>();
-		b.send(Message::Observe(observe,s));
+		b.send( Message::Observe(topic.to_string(),s));
 		while let Ok(message) = r.recv() {
 			match message {
-				Message::Spawn(policy,observe) => {
-					camera_service(&b,&policy,&observe);
+				Message::Post(topic,params) => {
+					println!("camera got post {} {}",&topic,&params);
 				},
 				_ => {
-					println!("camera_spawn: got message");
+					println!("camera: got message");
 				},
 			}
 		}
@@ -168,6 +193,19 @@ fn camera_service(b:&MessageSender,policy:&str,observe:&str) {
 /////////////////////////////////////////////////////////////////////////////////////////////// 
 
 fn tensor_service(b:&MessageSender) {
+	let b = b.clone();
+	thread::spawn(move || {
+		let (s,r) = unbounded::<Message>();
+		while let Ok(message) = r.recv() {
+			match message {
+				Message::Spawn(topic,policy) => {
+				},
+				_ => {
+					println!("tensor: got message");
+				},
+			}
+		}
+	});
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
@@ -189,80 +227,71 @@ fn wasm_service(b:&MessageSender) {
 
 fn scripting_service(b:&MessageSender, path: &str) {
 
-	// a name
-	let name = "scripting";
-
-	// message handlers
+	// shake off the lifetime scope of the borrow checker
+	let b = b.clone();
 
 	// spawn a thread and watch for events
-	let _thread = std::thread::Builder::new().name(name.to_string()).spawn(move || {
+	thread::spawn(move || {
 
-		// some rando chicken waving js bootstrap crap
+		// Initialize V8
 		let platform = v8::new_default_platform(0, false).make_shared();
 		v8::V8::initialize_platform(platform);
 		v8::V8::initialize();
 
-		// some kind of context concept? dunno, weird whatever dead chicken waving
-		let isolate = &mut v8::Isolate::new(Default::default());
+		// An isolate is another copy of the v8 runtime for some unknown reason
+		let isolate = &mut v8::Isolate::new(Default::default()); // v8::CreateParams::default() also works?
+
+		// create a stack allocated handle scope
 		let handle = &mut v8::HandleScope::new(isolate);
+
+		// a "context"?
 		let context = v8::Context::new(handle);
+
+		// A "scope" in a context...?
 		let scope = &mut v8::ContextScope::new(handle, context);
 
-		// some kind of 'template' concept
-		let object_templ = v8::ObjectTemplate::new(scope);
+		//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+		// make an "object" that will become the global state, and stuff some callbacks into it
+		//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-			/* cleaner way to handle vars
-			let my_u8: u8 = "42".parse::<u8>().unwrap();
-			let my_u32: u32 = "42".parse::<u32>().unwrap();
+		// an "object" -> is apparently the equivalent of javascripts "const obj = {}"
+		let myglobals = v8::ObjectTemplate::new(scope);
 
-			// or, to be safe, match the `Err`
-			match "foobar".parse::<i32>() {
-			  Ok(n) => do_something_with(n),
-			  Err(e) => weep_and_moan(),
-			}
-			*/
+		// create space for a field later
+		myglobals.set_internal_field_count(1);
 
-			// a fn
-			fn log_callback( scope: &mut v8::HandleScope, args: v8::FunctionCallbackArguments, mut _retval: v8::ReturnValue ) {
-				let message = args.get(0).to_string(scope).unwrap().to_rust_string_lossy(scope);
-				println!("Logged: {}", message);
-				let my_int: i32 = message.parse().unwrap();
-				_retval.set(v8::Integer::new(scope, my_int).into());
-			}
-			object_templ.set( v8::String::new(scope,"log").unwrap().into(), v8::FunctionTemplate::new(scope,log_callback).into() );
+		// add function
+		myglobals.set( v8::String::new(scope,"log").unwrap().into(), v8::FunctionTemplate::new(scope,js_callback).into() );
 
-			// another fn
-			fn log2_callback( scope: &mut v8::HandleScope, args: v8::FunctionCallbackArguments, mut _retval: v8::ReturnValue ) {
-				let message = args.get(0).to_string(scope).unwrap().to_rust_string_lossy(scope);
-				println!("Logged2: {}", message);
-				let my_int: i32 = message.parse().unwrap();
-				_retval.set(v8::Integer::new(scope, my_int).into());
-			}
-			object_templ.set( v8::String::new(scope,"log2").unwrap().into(), v8::FunctionTemplate::new(scope,log2_callback).into() );
-
-			// another fn -> see https://github.com/denoland/rusty_v8/blob/fa8f636397822ba7dbb823d25dc637bf77f8b1ce/tests/test_api.rs#L1091-L1101
-			// also see -> https://github.com/denoland/rusty_v8/issues/404
-			// see https://github.com/denoland/deno/blob/ccd0d0eb79db6ad33095ca06e9d491a27379b87a/core/examples/http_bench.rs#L184-L195
-			// see https://github.com/denoland/rusty_v8/blob/main/examples/process.rs
-			//let create_message = v8::Function::new(scope,
-			//	|scope: &mut v8::HandleScope, args: v8::FunctionCallbackArguments, mut rv: v8::ReturnValue| {
-			//		let message = v8::Exception::create_message(scope, args.get(0));
-			//		let message_str = message.get(scope);
-			//		rv.set(message_str.into())
-			//  },
-			//).unwrap();
-			//object_templ.set( v8::String::new(scope,"msg").unwrap().into(), create_message.into() );
-
-
-		let context = v8::Context::new_from_template(scope, object_templ);
+		// promote this new object to be 'global'
+		let context = v8::Context::new_from_template(scope, myglobals);
 		let scope = &mut v8::ContextScope::new(scope, context);
 
-		//let scope = scope.enter();
-		//let context = v8::Context::new_from_function(scope, create_message);
-		//let scope = &mut v8::ContextScope::new(scope, context);
+		//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+		// stuff our back pointer to the messaging system into the javascript layer so that it is visible to the fucking callback
+		//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-		// test code
-		let code = v8::String::new(scope, "let x = log(12) + log2(14); x").unwrap();
+		// 1) in rust parlance this moves the artifact to the heap along with a nominal concept of ownership
+		//let boxed_sender = Box::<MessageSender>::new(b);
+
+		// 2) now violate that trust by getting a raw pointer to the thing
+		//let boxed_ptr : *mut MessageSender = Box::into_raw(boxed_sender);
+
+		// 3) and explicitly more exactly cast raw ptr as a raw 'unknown' pointer because rust
+		//let raw_ptr = boxed_ptr as *mut std::ffi::c_void;
+
+		// 4) wrap that radioactive waste in a v8 compatible 'external'
+		//let ext = v8::External::new(scope,raw_ptr);
+
+		// 5) stuff external an internal field area - no idea what "into" means
+		//context.global(scope).set_internal_field(0,ext.into());
+
+		//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+		// run the javascript
+		//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+		// js code
+		let code = v8::String::new(scope, "log(12); log(14);").unwrap();
 
 		// run it
 		let script = v8::Script::compile(scope, code, None).unwrap();
@@ -283,6 +312,43 @@ fn scripting_service(b:&MessageSender, path: &str) {
 
 	});
 
+}
+
+
+// test callback #1
+fn js_callback( scope: &mut v8::HandleScope, args: v8::FunctionCallbackArguments, mut _retval: v8::ReturnValue ) {
+
+	// 1) get context
+	//let context = scope.get_current_context();
+
+	// 2) get external from internal - preemptively unwrap because we believe it exists - ignore Some/None
+	//let ext = context.global(scope).get_internal_field(scope,0).unwrap();
+
+	// 3) cast it back
+    //let ext = unsafe { v8::Local::<v8::External>::cast(ext) };
+
+	// 4) get it as a c pointer again
+	//let raw_ptr : *mut std::ffi::c_void = ext.value();
+	//let raw_ptr2 = raw_ptr as *mut MessageSender;
+
+	// 5) go back up to being a boxed messagesender
+	//let recovered = unsafe { Box::<MessageSender>::from_raw( raw_ptr2 ) };
+
+	// 6) send it a message as a test
+	//recovered.send(Message::Post("/camera".to_string(),"amazing ".to_string()));
+
+	// the ref is being refcounted away...
+	//let boxed_ptr : *mut MessageSender = Box::into_raw(recovered);
+
+	BROKER.get().unwrap().send(Message::Post("/camera".to_string(),"amazing ".to_string()));
+
+	// do something to peek at the javascript first argument
+	let message = args.get(0).to_string(scope).unwrap().to_rust_string_lossy(scope);
+	//println!("Logged: {}", message);
+
+	// send something fun back
+	let my_int: i32 = message.parse().unwrap();
+	_retval.set(v8::Integer::new(scope, my_int).into());
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
