@@ -81,7 +81,6 @@ fn view_logic_update(_app: &App, state: &mut ViewState, update: Update) {
 					if o.id == n.id {
 						o.w = n.w;
 						o.h = n.h;
-						println!("match");
 						found = 1;
 					}
 				}

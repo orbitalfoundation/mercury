@@ -40,10 +40,14 @@ message("/pixels",JSON.stringify({
 
 // second hand
 
+const d = new Date();
+let seconds = d.getSeconds();
+console.log("seconds is " + seconds);
 let r = 0;
 
-setInterval(1000,()=> {
-	r += 3.1459*2.0/60.0;
+let callback = ()=> {
+	r = 3.1459*2.0/60*seconds;
+	seconds++;
 	let node = {
 		"id":1,
 		"kind":1,
@@ -53,8 +57,11 @@ setInterval(1000,()=> {
 		"h":Math.cos(r)*100.0
 	}
 	message("/pixels",JSON.stringify(node));
-})
+}
 
+
+callback();
+setInterval(1000,callback);
 
 
 
