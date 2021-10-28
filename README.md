@@ -17,42 +17,40 @@
 ## display
 
 	? i could use wgpu + say wgpu_glyph to compose and render primitives by hand
-        this requires building out concepts like lights, cameras, objects and so on
-        and integrating that with 2d painting and widgets as well
+		this requires building out concepts like lights, cameras, objects and so on
+		and integrating that with 2d painting and widgets as well
 
-    ? i could use say egui and bind it to wgpu as well it looks like
-        this does have 2d drawing primitives
-        and it does give me some rich ux
+	? i could use say egui and bind it to wgpu as well it looks like
+		this does have 2d drawing primitives
+		and it does give me some rich ux
 
-    ? nannou would get me part way...
-
-    ? 
+	? nannou would get me part way...
 
 
-    - 2d
-    	- open a window
-        - draw a box
-        - draw a circle
-        - images
-        - draw some text
-        - various scaling, cutting, pasting, pruning operations
-        - paths, bezier and so on
-        - thick lines and so on
+	- basic primitive abstractions to expose to js
 
-    - 3d
-    	- a retained mode scene graph (i can make it?)
-        - load a gltf
-        - lighting
-        - camera
+		- display -> a whole display surface; can only have one
+		- area -> may as well be 3d
+		- area -> nesting and layout concepts may be here as well
+		- box -> relative to parent scope
+		- circle
+		- image
+		- text; scaling
+		- paths; lines
 
-    - behavior
-        - layout engine
-        - detect mouse intersection with 2d and 3d objects
-        - object to object collision
-        - physics and animation built in or using a third party tool
+		- gltfs
+		- lights
+		- cameras
+		- tubes
+		- sphere
+		- box
 
-    - maths library
-
+	- richer features to expose
+		- a layout engine
+		- mouse events
+		- collision
+		- physics and animation
+		- maths library?
 
 ## todo oct 2021
 
