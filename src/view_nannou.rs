@@ -14,7 +14,8 @@ struct Node {
 	y: f32,
 	w: f32,
 	h: f32,
-	kind: i32
+	kind: i32,
+	text: String,
 }
 
 struct ViewState {
@@ -73,6 +74,7 @@ fn view_logic_update(_app: &App, state: &mut ViewState, update: Update) {
 					w: v["w"].to_string().parse().unwrap(),
 					h: v["h"].to_string().parse().unwrap(),
 					kind: v["kind"].to_string().parse().unwrap(),
+					text: v["text"].to_string(),
 				};
 
 				// save or update
@@ -127,31 +129,19 @@ fn view_paint_update(app: &App, state: &ViewState, frame: Frame) {
 
 			},
 			2 => {
-
-    let win_rect = app.main_window().rect().pad(20.0);
-
-
-    let text = "
-    “What will the web look like in 10 years?”.
-
-We believe that reality is the platform for future computing.
-
-We believe the web in the future will be largely based around 3D and presence. We believe web interfaces will start to blend with the real world, that there will be virtual actions or verbs attached to everyday objects. This is an augmented future where information is attached to place; not presented separately. One that uses natural human gestures and motions; not by poking at a screen.
-
-We see web browsers not as text or content readers but as a “computational soup” running many durable and persistent user-agents with fine-grained permissions controls, all collaborating and communicating together, filtering and sense-making. Where computation moves between devices as needed, moving towards a decentralized future without walled gardens or large silo based social networks.
-";
-
-    //                         L     o     r     e     m           i    p    s    u    m
-    let glyph_colors = vec![BLUE, BLUE, BLUE, BLUE, BLUE, BLACK, RED, RED, RED, RED, RED];
-
-    draw.text(text)
-        .color(BLACK)
-        .glyph_colors(glyph_colors)
-        .font_size(24)
-        .wh(win_rect.wh());
-
-
 				draw.ellipse().x_y(n.x,n.y).radius(n.w/2.0).color(RED);
+			},
+			3 => {
+			    let win_rect = app.main_window().rect().pad(20.0);
+			    //                         L     o     r     e     m           i    p    s    u    m
+			    let glyph_colors = vec![BLUE, BLUE, BLUE, BLUE, BLUE, BLACK, RED, RED, RED, RED, RED];
+
+			    draw.text(&n.text)
+			        .color(BLACK)
+			        .glyph_colors(glyph_colors)
+			        .font_size(24)
+			        .wh(win_rect.wh());
+
 
 			},
 			_ => {
