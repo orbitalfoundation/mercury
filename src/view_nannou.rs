@@ -16,11 +16,15 @@ struct Node {
 	h: f32,
 	kind: i32,
 	text: String,
+	textureid: usize,
 }
+
+type Texture = wgpu::Texture;
 
 struct ViewState {
 	r: MessageReceiver,
-	scene: Vec<Node>
+	scene: Vec<Node>,
+	textures: Vec<Texture>,
 }
 
 pub fn view_nannou_service(b:&MessageSender) {
@@ -45,7 +49,8 @@ fn view_state_build(app: &App) -> ViewState {
 	// return state
 	ViewState {
 		r: r,
-		scene: Vec::<Node>::new()
+		scene: Vec::<Node>::new(),
+		textures: Vec::<Texture>::new(),
 	}
 }
 
@@ -55,7 +60,7 @@ fn view_key_pressed(app: &App, state: &mut ViewState, _key: Key) {
 	//app.main_window().set_title(&title);
 }
 
-fn view_logic_update(_app: &App, state: &mut ViewState, update: Update) {
+fn view_logic_update(app: &App, state: &mut ViewState, update: Update) {
 	//println!("{:?}", update);
 
 	// get requests
@@ -67,7 +72,7 @@ fn view_logic_update(_app: &App, state: &mut ViewState, update: Update) {
 				let v :Value = serde_json::from_str(&params).unwrap();
 
 				// capture to node
-				let n = Node {
+				let mut n = Node {
 					id: v["id"].to_string().parse().unwrap(),
 					x: v["x"].to_string().parse().unwrap(),
 					y: v["y"].to_string().parse().unwrap(),
@@ -75,6 +80,7 @@ fn view_logic_update(_app: &App, state: &mut ViewState, update: Update) {
 					h: v["h"].to_string().parse().unwrap(),
 					kind: v["kind"].to_string().parse().unwrap(),
 					text: v["text"].to_string(),
+					textureid: 0,
 				};
 
 				// save or update
@@ -88,6 +94,18 @@ fn view_logic_update(_app: &App, state: &mut ViewState, update: Update) {
 				}
 
 				if found == 0 {
+
+					if(n.kind == 1160) {
+						if(state.textures.len() == 0) {
+							let assets = app.assets_path().unwrap();
+							let img_path = assets.join("textures").join("matrix.jpg");
+							let texture = wgpu::Texture::from_path(app, img_path).unwrap();
+							n.textureid = state.textures.len();
+							state.textures.push(texture);
+						}
+
+					}
+
 					state.scene.push(n);
 				}
 			},
@@ -100,7 +118,7 @@ fn view_logic_update(_app: &App, state: &mut ViewState, update: Update) {
 }
 
 fn view_paint_update(app: &App, state: &ViewState, frame: Frame) {
-	frame.clear(DIMGRAY);
+	//frame.clear(DIMGRAY);
 
 	// Begin drawing
 	let draw = app.draw();
@@ -114,50 +132,39 @@ fn view_paint_update(app: &App, state: &ViewState, frame: Frame) {
 	for n in &state.scene {
 		match(n.kind) {
 			0 => {
-
 				// Draw a purple triangle in the top left half of the window.
 				draw.tri().points(win.bottom_left(), win.top_left(), win.top_right()).color(VIOLET);
-
 			},
-			1 => {
+			1110 => {
 				draw.line()
 					.weight(10.0)
 					.caps_round()
 					.color(PALEGOLDENROD)
 					.points( pt2(n.x,n.y), pt2(n.w,n.h) )
 					;
-
 			},
-			2 => {
+			1120 => {
+				draw.rect().x_y(n.x,n.y).w(n.w).h(n.h).color(DARKGREEN);
+				//draw.rect().x_y(app.mouse.y, app.mouse.x).w(app.mouse.x * 0.25).hsv(t, 1.0, 1.0);
+			},
+			1130 => {
 				draw.ellipse().x_y(n.x,n.y).radius(n.w/2.0).color(RED);
 			},
-			3 => {
+			1140 => {
 			    let win_rect = app.main_window().rect().pad(20.0);
 			    //                         L     o     r     e     m           i    p    s    u    m
 			    let glyph_colors = vec![BLUE, BLUE, BLUE, BLUE, BLUE, BLACK, RED, RED, RED, RED, RED];
 
 			    draw.text(&n.text)
-			        .color(BLACK)
+			        .color(WHITE)
 			        .glyph_colors(glyph_colors)
 			        .font_size(24)
 			        .wh(win_rect.wh());
-
-
 			},
+			1160 => {
+				draw.texture(&state.textures[n.textureid]).xy(pt2(n.x,n.y)).wh(pt2(n.w,n.h));
+			}
 			_ => {
-
-				// Draw a quad that follows the inverse of the ellipse.
-				draw.quad()
-					.x_y(-app.mouse.x, app.mouse.y)
-					.color(DARKGREEN)
-					.rotate(t);
-
-				// Draw a rect that follows a different inverse of the ellipse.
-				draw.rect()
-					.x_y(app.mouse.y, app.mouse.x)
-					.w(app.mouse.x * 0.25)
-					.hsv(t, 1.0, 1.0);
-
 			}
 		}
 	}

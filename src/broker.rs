@@ -20,6 +20,8 @@ use serde::{Serialize, Deserialize};
 ///
 /// The broker allows components to broadcast to topics and to listen to topics; it has some security capabilities
 ///
+/// TODO persistence?
+///
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 pub type MessageSender = Sender<Message>;
