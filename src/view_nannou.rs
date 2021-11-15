@@ -1,3 +1,10 @@
+
+
+#![allow(dead_code)]
+#![allow(unused)]
+#![allow(unused_variables)]
+
+
 use nannou::prelude::*;
 
 use crossbeam::channel::*;
@@ -33,18 +40,21 @@ pub fn view_nannou_service(b:&MessageSender) {
 
 fn view_state_build(app: &App) -> ViewState {
 
-	// make app 
+	// make a window - TODO later let apps do this themselves
 	let _window = app
 		.new_window()
 		.title(format!("Orbital Demonstration - `{:?}`",app.loop_mode()))
 		.key_pressed(view_key_pressed)
+		.mouse_moved(view_mouse_moved)
+		.mouse_pressed(view_mouse_pressed)
+		.mouse_released(view_mouse_released)
 		.view(view_paint_update)
 		.build()
 		.unwrap();
 
 	// set message channel
 	let (s,r) = unbounded::<Message>();
-	BROKER.get().unwrap().send( Message::Observe("/pixels".to_string(),s));
+	BROKER.get().unwrap().send( Message::Observe("/view".to_string(),s));
 
 	// return state
 	ViewState {
@@ -54,16 +64,27 @@ fn view_state_build(app: &App) -> ViewState {
 	}
 }
 
+fn view_key_pressed(app: &App, state: &mut ViewState, e: Key) {
+	BROKER.get().unwrap().send( Message::Post("/io".to_string(),"{event:'key'}".to_string()));
+}
 
-fn view_key_pressed(app: &App, state: &mut ViewState, _key: Key) {
-	//let title = format!("`LoopMode` Demonstration - `{:?}`", app.loop_mode());
-	//app.main_window().set_title(&title);
+fn view_mouse_moved(app: &App, state: &mut ViewState, e: Vec2) {
+	let str = format!("{}event:'mousemove',x:{},y:{}{}",&"{",e.x,e.y,&"}");
+	BROKER.get().unwrap().send( Message::Post("/io".to_string(),str));
+}
+
+fn view_mouse_pressed(app: &App, state: &mut ViewState, e: MouseButton) {
+	BROKER.get().unwrap().send( Message::Post("/io".to_string(),"{event:'mousedown'}".to_string()));
+}
+
+fn view_mouse_released(app: &App, state: &mut ViewState, e: MouseButton) {
+	BROKER.get().unwrap().send( Message::Post("/io".to_string(),"{event:'mouseup'}".to_string()));
 }
 
 fn view_logic_update(app: &App, state: &mut ViewState, update: Update) {
 	//println!("{:?}", update);
 
-	// get requests
+	// handle new requests - especially messages that add stuff to the scene
 	while let Ok(message) = state.r.try_recv() {
 		match message {
 			Message::Post(topic,params) => {
@@ -87,6 +108,8 @@ fn view_logic_update(app: &App, state: &mut ViewState, update: Update) {
 				let mut found = 0;
 				for o in state.scene.iter_mut() {
 					if o.id == n.id {
+						o.x = n.x;
+						o.y = n.y;
 						o.w = n.w;
 						o.h = n.h;
 						found = 1;

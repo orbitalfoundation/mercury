@@ -1,127 +1,36 @@
 
-#![allow(dead_code)]
-#![allow(unused)]
-#![allow(unused_variables)]
-
-use std::thread;
-use std::sync::Arc;
-use std::sync::Mutex;
-use std::collections::HashMap;
-use std::collections::HashSet;
-use std::cell::RefCell;
-use std::vec::Vec;
-use crossbeam::channel::*;
-use serde::{Serialize, Deserialize};
 
 mod broker;
-use crate::broker::*;
-
-mod view_nannou;
-use crate::view_nannou::*;
-
+mod logging;
+mod camera;
+mod tensor;
+mod wasm;
+mod timer;
 mod scripting;
-use crate::scripting::*;
-
-/////////////////////////////////////////////////////////////////////////////////////////////////
-//
-// entrypoint
-//
-/////////////////////////////////////////////////////////////////////////////////////////////////
+mod view_nannou;
 
 fn main() {
 
-	let b = broker_service();
+	// a broker allows other services to talk to each other; start it first
+	let b = broker::broker_service();
 
-	logging_service(&b);
-	camera_service(&b,"/camera");
-	tensor_service(&b);
-	wasm_service(&b);
-	scripting_service(&b,"boot.js");
+	// logging is a built in service, useful to have it up early
+	logging::logging_service(&b);
 
+	// a pile of other miscellaneous built in services
+	camera::camera_service(&b,"/camera");
+	tensor::tensor_service(&b);
+	timer::timer_service();
 
-	view_nannou_service(&b);
+	// most all late binding services (as opposed to build in services) come in via wasm modules
+	wasm::wasm_service(&b);
 
+	// a built in scripting service instance which will run a script to produce some of the ux
+	scripting::scripting_service(&b,"boot.js");
+
+	// a built in display service, which has to be mounted last unfortunately due to a quirk with thread events
+	view_nannou::view_nannou_service(&b);
 
 }
 
-
-/////////////////////////////////////////////////////////////////////////////////////////////////
-///
-/// Another component (test)
-///
-/////////////////////////////////////////////////////////////////////////////////////////////////
-
-fn camera_service(b:&MessageSender,topic:&str) {
-	let b = b.clone();
-	let topic = topic.to_string();
-	thread::spawn(move || {
-		let (s,r) = unbounded::<Message>();
-		b.send( Message::Observe(topic.to_string(),s));
-		while let Ok(message) = r.recv() {
-			match message {
-				Message::Post(topic,params) => {
-					println!("camera got post {} {}",&topic,&params);
-				},
-				_ => {
-					println!("camera: got message");
-				},
-			}
-		}
-	});
-}
-
-/////////////////////////////////////////////////////////////////////////////////////////////////
-///
-/// logging
-///
-/////////////////////////////////////////////////////////////////////////////////////////////// 
-
-fn logging_service(b:&MessageSender) {
-	let b = b.clone();
-	thread::spawn(move || {
-		let (s,r) = unbounded::<Message>();
-		BROKER.get().unwrap().send( Message::Observe("/log".to_string(),s));
-		while let Ok(message) = r.recv() {
-			match message {
-				Message::Post(topic,params) => {
-					println!("log: {}",&params);
-				},
-				_ => {
-					println!("log: got message");
-				},
-			}
-		}
-	});
-}
-
-/////////////////////////////////////////////////////////////////////////////////////////////////
-///
-/// tensor
-///
-/////////////////////////////////////////////////////////////////////////////////////////////// 
-
-fn tensor_service(b:&MessageSender) {
-	let b = b.clone();
-	thread::spawn(move || {
-		let (s,r) = unbounded::<Message>();
-		while let Ok(message) = r.recv() {
-			match message {
-				Message::Spawn(topic,policy) => {
-				},
-				_ => {
-					println!("tensor: got message");
-				},
-			}
-		}
-	});
-}
-
-/////////////////////////////////////////////////////////////////////////////////////////////////
-///
-/// wasm
-///
-/////////////////////////////////////////////////////////////////////////////////////////////// 
-
-fn wasm_service(b:&MessageSender) {
-}
 

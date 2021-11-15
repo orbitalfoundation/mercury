@@ -79,28 +79,76 @@ pub fn scripting_service(b:&MessageSender, path: &str) {
 		let scope = &mut v8::ContextScope::new(scope, context);
 
 		//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-		// run the javascript
+		// basics
 		//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-		// fetch the js
+		let contents = std::fs::read_to_string("public/libs/common.js").expect("Load error");
+		let sourcecode = v8::String::new(scope,&contents).unwrap();
+		let script = v8::Script::compile(scope, sourcecode, None).unwrap();
+		let result = script.run(scope).unwrap();
+		let result = result.to_string(scope).unwrap();
+
+		//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+		// a thing that helps run apps, loads manifests and so on
+		//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+		let contents = std::fs::read_to_string("public/libs/runner.js").expect("Load error");
+		let sourcecode = v8::String::new(scope,&contents).unwrap();
+		let script = v8::Script::compile(scope, sourcecode, None).unwrap();
+		let result = script.run(scope).unwrap();
+		let result = result.to_string(scope).unwrap();
+
+		//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+		// a wrapper for the view service
+		//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+		let contents = std::fs::read_to_string("public/libs/view.js").expect("Load error");
+		let sourcecode = v8::String::new(scope,&contents).unwrap();
+		let script = v8::Script::compile(scope, sourcecode, None).unwrap();
+		let result = script.run(scope).unwrap();
+		let result = result.to_string(scope).unwrap();
+
+		//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+		// run the javascript
+		// - TODO right now i am just running a default boot script; later it should run whatever it is told to run
+		//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 		let contents = std::fs::read_to_string("public/boot.js").expect("Load error");
 		let sourcecode = v8::String::new(scope,&contents).unwrap();
-
-		// run it
 		let script = v8::Script::compile(scope, sourcecode, None).unwrap();
 		let result = script.run(scope).unwrap();
 		let result = result.to_string(scope).unwrap();
 		//println!("scripting: {}", result.to_rust_string_lossy(scope));
 
-		// - it would be nice to have javascript listen to traffic, such as say mouse input
-		// - to do that i do need to make a sender and a receiver per thread
-		// - and then i need to pass the sender to anything i want to observe; ideally from a js callback
-		// - and then i also need to query the receiver with try_recv() from js and return the results
+		println!("** scripting loaded boot script **");
+
+		// watch for events that scripting may like to know about
+		//
+		// - TODO note ideally scripting engines themselves should be saying what arbitrary events they want to listen to
+		// - TODO there is no strategy yet to decide which scripting engine instance would get mouse inputs... (maybe I should just have one and sub-manage)
+		//
 
 		let (s,r) = unbounded::<Message>();
+		BROKER.get().unwrap().send( Message::Observe("/io".to_string(),s.clone()));
+		BROKER.get().unwrap().send( Message::Observe("/timer".to_string(),s.clone()));
 
-		while let Ok(message) = r.try_recv() {
+		while let Ok(message) = r.recv() {
 			match message {
+				Message::Post(topic,params) => {
+
+					// this is a test of calling js from code... i really want to pass the event down to js
+
+					// trying to call a method... this is just too complex
+					//v8::Local<v8::Value> foo_value = context->Global()->Get(v8::String::NewFromUtf8(isolate, "foo"));
+					//let special = context.get(v8::String::new(scope,"special").unwrap().into());
+					//let ext = context.global(scope).get_internal_field(scope,0).unwrap();
+
+					// this works... it's probably very slow TODO
+					let sourcecode = ["special_callback(",&params,")"].join("");
+					let sourcecode = v8::String::new(scope,&sourcecode).unwrap();
+					let script = v8::Script::compile(scope, sourcecode, None).unwrap();
+					let result = script.run(scope).unwrap();
+				},
 				_ => {},
 			}
 		};

@@ -2,6 +2,21 @@
 
 ## TODO
 
+	* NOV 14 - FIRMED UP SOME CONCEPTS OF SYSTEM RUNNERS AND APP LOADERS
+
+	- Need to figure out how to call a js method or something... or have a js thing poll me... this may be best
+
+	I firmed up an idea of a system runner and app loader
+	Now I need to pass events from the view layer down to the js layer
+		- and then invent buttons
+
+	- let's test out rendering a few simple elements to the display; like a nice button, maybe with an image in it
+	- lets try pipe ux back to the js layer
+
+	- maybe also try renderlib
+	- 
+
+
 	- the broker probably needs to save state to disk, and also handle graph fragments
 
 	- show off login
