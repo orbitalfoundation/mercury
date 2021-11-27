@@ -63,7 +63,7 @@ let POLYHEDRA2D = 1150
 let IMAGE2D = 1160
 let SVG2D = 1170
 
-let prototypes = {
+let prototypes = { // todo later actually use this - it is not used right now
 	kind:ELEMENT,
 	visible:false,
 	element: {

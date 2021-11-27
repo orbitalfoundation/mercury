@@ -1,6 +1,19 @@
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //
+// Broker Wrapper
+//
+//
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+let BROKER = {
+	event: (blob) => {
+		broker_event(blob.path,JSON.stringify(blob))
+	}
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//
 // App Runner
 //
 //		- There's a concept of a 'service' which is a proxy for a rust side service that can only be reached by messaging
@@ -147,16 +160,24 @@ function special_callback(args) {
 
 console.log("We see listen port here as " + LISTENPATH );
 
-// build a message for the timer, telling it to publish state to this path
+// build a message for the timer, telling it to publish state to this path - this is really just a test of connecting services
 
-let msg = {
+BROKER.event({
 	path:"localhost:/orbital/service/timer",
 	command:"echo",
 	millis:"1000",
 	echo:LISTENPATH,
-}
+})
 
-broker_event(msg.path,JSON.stringify(msg));
+// build a message for the view engine, telling it to publish user io to us; it could also publish update ticks as well
+
+BROKER.event({
+	path:"localhost:/orbital/service/view",
+	command:"echo",
+	events:"io",
+	echo:LISTENPATH,
+})
+
 
 
 

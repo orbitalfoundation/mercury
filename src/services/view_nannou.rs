@@ -32,6 +32,7 @@ struct ViewState {
 	scene: Vec<Node>,
 	textures: Vec<Texture>,
 	path: String,
+	echos: Vec<String>,
 }
 
 pub fn view_nannou_service(_path:&str) {
@@ -62,6 +63,7 @@ fn view_state_build(app: &App) -> ViewState {
 		scene: Vec::<Node>::new(),
 		textures: Vec::<Texture>::new(),
 		path: String::from("hello"),
+		echos: Vec::<String>::new(),
 	}
 }
 
@@ -73,6 +75,13 @@ fn view_key_pressed(app: &App, state: &mut ViewState, e: Key) {
 fn view_mouse_moved(app: &App, state: &mut ViewState, e: Vec2) {
 	let str = format!("{}event:'mousemove',x:{},y:{}{}",&"{",e.x,e.y,&"}");
 	broker::event_with_path("/service/view/out",&str);
+
+
+	for x in &state.echos {
+		broker::event_with_path(&x,&str);
+		//println!("timer: echoes to {}",x);
+	}
+
 }
 
 fn view_mouse_pressed(app: &App, state: &mut ViewState, e: MouseButton) {
@@ -94,7 +103,25 @@ fn view_logic_update(app: &App, state: &mut ViewState, update: Update) {
 				// get json parsed
 				let v :Value = serde_json::from_str(&args).unwrap();
 
-				// capture to node
+				let command = v["command"].as_str();
+				match command {
+					Some("echo") => {
+						//println!("view: got special command");
+						let echo = v["echo"].as_str().unwrap().to_string();
+						println!("Being asked to echo to {}",echo);
+						state.echos.push(echo);
+						return;
+					},
+					Some(&_) => {
+						println!("weird");
+						return;
+					}
+					None => {
+						//return;
+					}
+				}
+
+				// capture to node - TODO later actually serde can do this for us
 				let mut n = Node {
 					id: v["id"].to_string().parse().unwrap(),
 					x: v["x"].to_string().parse().unwrap(),
