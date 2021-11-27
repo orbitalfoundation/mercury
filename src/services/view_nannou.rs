@@ -7,8 +7,7 @@
 
 use nannou::prelude::*;
 
-use crossbeam::channel::*;
-use crate::broker::*;
+use crate::services::broker;
 
 use serde_json::{Result, Value};
 
@@ -29,18 +28,20 @@ struct Node {
 type Texture = wgpu::Texture;
 
 struct ViewState {
-	r: MessageReceiver,
+	r: broker::MessageReceiver,
 	scene: Vec<Node>,
 	textures: Vec<Texture>,
+	path: String,
 }
 
-pub fn view_nannou_service(b:&MessageSender) {
+pub fn view_nannou_service(_path:&str) {
+	// WHY do they pass my request through a needless function? - why do rust library developers always make it so hard to pass state through - see _path
 	nannou::app(view_state_build).update(view_logic_update).run();
 }
 
 fn view_state_build(app: &App) -> ViewState {
 
-	// make a window - TODO later let apps do this themselves
+	// make a window - TODO later let orbital apps make the window themselves rather than ahead of time
 	let _window = app
 		.new_window()
 		.title(format!("Orbital Demonstration - `{:?}`",app.loop_mode()))
@@ -52,33 +53,34 @@ fn view_state_build(app: &App) -> ViewState {
 		.build()
 		.unwrap();
 
-	// set message channel
-	let (s,r) = unbounded::<Message>();
-	BROKER.get().unwrap().send( Message::Observe("/view".to_string(),s));
+	// set message channel - TODO use a supplied path
+	let r = broker::listen("localhost:/orbital/service/view");
 
 	// return state
 	ViewState {
 		r: r,
 		scene: Vec::<Node>::new(),
 		textures: Vec::<Texture>::new(),
+		path: String::from("hello"),
 	}
 }
 
 fn view_key_pressed(app: &App, state: &mut ViewState, e: Key) {
-	BROKER.get().unwrap().send( Message::Post("/io".to_string(),"{event:'key'}".to_string()));
+	// TODO  let str = format!("{}event:'mousemove',x:{},y:{}{}",&"{",e.x,e.y,&"}");
+	broker::event_with_path("/service/view/out","{event:'key'}");
 }
 
 fn view_mouse_moved(app: &App, state: &mut ViewState, e: Vec2) {
 	let str = format!("{}event:'mousemove',x:{},y:{}{}",&"{",e.x,e.y,&"}");
-	BROKER.get().unwrap().send( Message::Post("/io".to_string(),str));
+	broker::event_with_path("/service/view/out",&str);
 }
 
 fn view_mouse_pressed(app: &App, state: &mut ViewState, e: MouseButton) {
-	BROKER.get().unwrap().send( Message::Post("/io".to_string(),"{event:'mousedown'}".to_string()));
+	broker::event_with_path("/service/view/out","{event:'mousedown'}");
 }
 
 fn view_mouse_released(app: &App, state: &mut ViewState, e: MouseButton) {
-	BROKER.get().unwrap().send( Message::Post("/io".to_string(),"{event:'mouseup'}".to_string()));
+	broker::event_with_path("/service/view/out","{event:'mouseup'}");
 }
 
 fn view_logic_update(app: &App, state: &mut ViewState, update: Update) {
@@ -87,10 +89,10 @@ fn view_logic_update(app: &App, state: &mut ViewState, update: Update) {
 	// handle new requests - especially messages that add stuff to the scene
 	while let Ok(message) = state.r.try_recv() {
 		match message {
-			Message::Post(topic,params) => {
+			broker::Message::Event(path,args) => {
 
 				// get json parsed
-				let v :Value = serde_json::from_str(&params).unwrap();
+				let v :Value = serde_json::from_str(&args).unwrap();
 
 				// capture to node
 				let mut n = Node {

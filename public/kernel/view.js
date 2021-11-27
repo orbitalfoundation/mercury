@@ -123,6 +123,11 @@ let prototypes = {
 	},
 }
 
+
+///
+/// Manage a local version of the view scenegraph and send changes to real view engine
+///
+
 class VIEW extends SERVICE {
 	load(fragment) {
 		this.fragment = fragment
@@ -131,9 +136,13 @@ class VIEW extends SERVICE {
 		for(let [name,node] of Object.entries(this.fragment)) {
 			if(!node.kind) return
 			if(node.update) node.update(node)
-			message("/view",JSON.stringify(node))
+			broker_event("localhost:/orbital/service/view",JSON.stringify(node))
 		}
 	}
 }
 
-SERVICEFACTORY["/view"] = VIEW
+///
+/// Register javascript wrapper modules with a javascript version of the rust side services layer
+///
+
+SERVICEFACTORY["localhost:/orbital/service/view"] = VIEW

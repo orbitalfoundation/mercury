@@ -9,7 +9,11 @@
 let console = {
 	log: function(one,two,three) {
 		let args = Array.prototype.slice.call(arguments)
-		message("/log",args.join(""))
+		broker_event("localhost:/orbital/service/log",args.join(""))
+	},
+	error: function(one,two,three) {
+		let args = Array.prototype.slice.call(arguments)
+		broker_event("localhost:/orbital/service/log",args.join(""))
 	}
 }
 
