@@ -1,0 +1,11 @@
+[package]
+name = "logging"
+version = "0.1.0"
+edition = "2018"
+
+[dependencies]
+
+broker = { path = "../broker" }
+
+crossbeam = "0.8.1"
+

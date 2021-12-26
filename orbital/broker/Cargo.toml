@@ -1,0 +1,9 @@
+[package]
+name = "broker"
+version = "0.1.0"
+edition = "2018"
+
+[dependencies]
+
+crossbeam = "0.8.1"
+once_cell = "1.8.0"
